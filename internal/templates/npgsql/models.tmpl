@@ -3,10 +3,10 @@
 //     sqlc {{ .SqlcVersion }}
 //     sqlc-gen-cs {{ .CsGenVersion }}
 
-namespace {{ .Namespace }}
+namespace {{ .Namespace }};
 
 {{range .Classes}}
-{{if .Comment}}{{comment .Comment}}{{end}}
+{{if .Comment}}{{comment.Comment}}{{end}}
 public class {{.Name}} { {{- range .Members}}
     {{- if .Comment}}
     {{comment .Comment}}{{else}}

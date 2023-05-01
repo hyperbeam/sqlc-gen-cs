@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
@@ -64,6 +65,7 @@ func BuildEnums(req *plugin.CodeGenRequest) []Enum {
 }
 
 func BuildClasses(req *plugin.CodeGenRequest) []Class {
+	log.Println("Building classes...")
 	var classes []Class
 	for _, schema := range req.Catalog.Schemas {
 		if schema.Name == "pg_catalog" || schema.Name == "information_schema" {
@@ -100,6 +102,8 @@ func BuildClasses(req *plugin.CodeGenRequest) []Class {
 		sort.Slice(classes, func(i, j int) bool { return classes[i].Name < classes[j].Name })
 	}
 
+	log.Println("Classes built: ", classes)
+
 	return classes
 }
 
@@ -113,11 +117,11 @@ func BuildQueries(req *plugin.CodeGenRequest, conf Config, classes []Class) ([]Q
 			continue
 		}
 
-		constantName := sdk.Title(query.Name)
+		constantName := strings.ToUpper(query.Name) + "_SQL"
 
 		gq := Query{
 			Cmd:          query.Cmd,
-			constantName: constantName,
+			ConstantName: constantName,
 			MethodName:   query.Name,
 			SourceName:   query.Filename,
 			SQL:          query.Text,
@@ -125,6 +129,14 @@ func BuildQueries(req *plugin.CodeGenRequest, conf Config, classes []Class) ([]Q
 			Table:        query.InsertIntoTable,
 		}
 		if len(query.Params) == 1 && conf.QueryParamLimit != 0 {
+			p := query.Params[0]
+			gq.Arg = QueryValue{
+				Name:   paramName(p),
+				DBName: p.Column.Name,
+				Typ:    CsType(req, p.Column),
+				Column: p.Column,
+			}
+		} else if len(query.Params) >= 1 {
 			var cols []codeColumn
 			for _, p := range query.Params {
 				cols = append(cols, codeColumn{
@@ -134,16 +146,17 @@ func BuildQueries(req *plugin.CodeGenRequest, conf Config, classes []Class) ([]Q
 			}
 			c, err := columnsToClass(req, gq.MethodName+"Params", cols, false)
 			if err != nil {
+				log.Println("Error in arguments: ", err)
 				return nil, err
 			}
-			gq.Args = QueryValue{
+			gq.Arg = QueryValue{
 				Emit:  true,
 				Name:  "arg",
 				Class: c,
 			}
 
 			if len(query.Params) <= conf.QueryParamLimit {
-				gq.Args.Emit = false
+				gq.Arg.Emit = false
 			}
 		}
 

@@ -5,7 +5,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
 	"text/template"
+	"unicode"
+	"unicode/utf8"
 
 	plugin "github.com/tabbed/sqlc-go/codegen"
 
@@ -25,6 +31,14 @@ type TemplateCtx struct {
 	Classes       []core.Class
 }
 
+func (t *TemplateCtx) OutputQuery(sourceName string) bool {
+	return t.QueryFileName == StripExtension(sourceName)
+}
+
+func (t *TemplateCtx) ClassName() {
+
+}
+
 func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error) {
 	var conf core.Config
 	if len(req.PluginOptions) > 0 {
@@ -33,9 +47,21 @@ func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error
 		}
 	}
 
+	if conf.LogFile != "" {
+		f, err := os.OpenFile(conf.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			log.Fatalf("Error opening log file: %v", err)
+		}
+
+		defer f.Close()
+		log.SetOutput(f)
+	}
+
+	log.Println("Beginning generation with config: ", conf)
 	//enums := core.BuildEnums(req)
 	classes := core.BuildClasses(req)
 	queries, err := core.BuildQueries(req, conf, classes)
+	log.Println("queries built: ", queries)
 	if err != nil {
 		return nil, err
 	}
@@ -45,12 +71,18 @@ func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error
 		SqlcVersion:  req.SqlcVersion,
 		CsGenVersion: version,
 		Namespace:    conf.Namespace,
+		Classes:      classes,
+	}
+
+	funcMap := template.FuncMap{
+		"comment":   DoubleSlashComment,
+		"classname": RawClassName,
 	}
 
 	tmpl := template.Must(template.New("table").
+		Funcs(funcMap).
 		ParseFS(
 			templates,
-			"templates/*.tmpl",
 			"templates/*/*.tmpl",
 		),
 	)
@@ -77,6 +109,7 @@ func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error
 	}
 
 	modelName := "Models"
+	log.Println("Creating models for: ", tctx.Classes)
 	if err := execute(modelName, "modelsFile"); err != nil {
 		return nil, err
 	}
@@ -87,7 +120,8 @@ func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error
 	}
 
 	for source := range files {
-		if err := execute(source, "queriesFile"); err != nil {
+		name := StripExtension(source)
+		if err := execute(name, "queriesFile"); err != nil {
 			return nil, err
 		}
 	}
@@ -101,4 +135,31 @@ func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error
 	}
 
 	return &resp, nil
+}
+
+func DoubleSlashComment(s string) string {
+	return "// " + strings.ReplaceAll(s, "\n", "\n// ")
+}
+
+func RawClassName(name string) string {
+	out := ""
+	for _, p := range strings.Split(name, "_") {
+		if p == "id" {
+			out += "ID"
+		} else {
+			out += strings.Title(p)
+		}
+	}
+
+	r, _ := utf8.DecodeRuneInString(out)
+	if unicode.IsDigit(r) {
+		return "_" + out
+	} else {
+		return out
+	}
+}
+
+func StripExtension(val string) string {
+	extension := filepath.Ext(val)
+	return val[0 : len(val)-len(extension)]
 }

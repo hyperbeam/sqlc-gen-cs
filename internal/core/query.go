@@ -1,6 +1,7 @@
 package core
 
 import (
+	"log"
 	"strings"
 
 	plugin "github.com/tabbed/sqlc-go/codegen"
@@ -10,13 +11,17 @@ type Query struct {
 	Cmd          string
 	Comments     []string
 	MethodName   string
-	constantName string
+	ConstantName string
 	SQL          string
 	SourceName   string
-	Args         QueryValue
+	Arg          QueryValue
 	Ret          QueryValue
 
 	Table *plugin.Identifier
+}
+
+func (q Query) HasArgs() bool {
+	return !q.Arg.isEmpty()
 }
 
 // QueryValue is the holder for our IO part of the query
@@ -54,6 +59,7 @@ func (v QueryValue) Type() string {
 }
 
 func (v QueryValue) Pair() string {
+	log.Println("Arg value pair: ", v)
 	if v.isEmpty() {
 		return ""
 	}
@@ -61,13 +67,13 @@ func (v QueryValue) Pair() string {
 	var out []string
 	if !v.EmitClass() && v.IsClass() {
 		for _, f := range v.Class.Members {
-			out = append(out, strings.ToLower(f.Name)+" "+f.Type)
+			out = append(out, f.Type+" "+strings.ToLower(f.Name))
 		}
 
-		return strings.Join(out, ",")
+		return ", " + strings.Join(out, ",")
 	}
 
-	return v.Name + " " + v.Type()
+	return ", " + v.Type() + " " + v.Name
 }
 
 func (v QueryValue) UniqueMembers() []ClassMember {
