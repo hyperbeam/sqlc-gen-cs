@@ -58,7 +58,7 @@ func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error
 	}
 
 	log.Println("Beginning generation with config: ", conf)
-	//enums := core.BuildEnums(req)
+	enums := core.BuildEnums(req)
 	classes := core.BuildClasses(req)
 	queries, err := core.BuildQueries(req, conf, classes)
 	log.Println("queries built: ", queries)
@@ -72,6 +72,7 @@ func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error
 		CsGenVersion: version,
 		Namespace:    conf.Namespace,
 		Classes:      classes,
+		Enums:        enums,
 	}
 
 	funcMap := template.FuncMap{
@@ -111,6 +112,10 @@ func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error
 	modelName := "Models"
 	log.Println("Creating models for: ", tctx.Classes)
 	if err := execute(modelName, "modelsFile"); err != nil {
+		return nil, err
+	}
+
+	if err := execute("DbHelper", "helpersFile"); err != nil {
 		return nil, err
 	}
 

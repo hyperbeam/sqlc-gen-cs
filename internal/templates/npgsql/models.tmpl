@@ -4,6 +4,14 @@
 //     sqlc-gen-cs {{ .CsGenVersion }}
 
 namespace {{ .Namespace }};
+{{ range .Enums }}
+{{ if .Comment }}{{ comment .Comment }}{{ end }}
+public enum {{.Name}} { {{- range .Members }}
+    {{ .Name }},
+    {{ end }}
+}
+{{ end }}
+
 
 {{range .Classes}}
 {{if .Comment}}{{comment.Comment}}{{end}}
