@@ -22,6 +22,7 @@ var version string
 
 type TemplateCtx struct {
 	EmitAsync     bool
+	EmitNulls     bool
 	SqlcVersion   string
 	CsGenVersion  string
 	Namespace     string
@@ -40,6 +41,10 @@ func (t *TemplateCtx) ClassName() {
 }
 
 func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error) {
+	if version == "" {
+		version = "0.1.0"
+	}
+
 	var conf core.Config
 	if len(req.PluginOptions) > 0 {
 		if err := json.Unmarshal(req.PluginOptions, &conf); err != nil {
@@ -59,7 +64,7 @@ func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error
 
 	log.Println("Beginning generation with config: ", conf)
 	enums := core.BuildEnums(req)
-	classes := core.BuildClasses(req)
+	classes := core.BuildClasses(req, conf)
 	queries, err := core.BuildQueries(req, conf, classes)
 	log.Println("queries built: ", queries)
 	if err != nil {
@@ -68,6 +73,7 @@ func Generate(ctx context.Context, req *plugin.Request) (*plugin.Response, error
 
 	tctx := TemplateCtx{
 		EmitAsync:    conf.EmitAsync,
+		EmitNulls:    conf.EmitNullOperators,
 		SqlcVersion:  req.SqlcVersion,
 		CsGenVersion: version,
 		Namespace:    conf.Namespace,

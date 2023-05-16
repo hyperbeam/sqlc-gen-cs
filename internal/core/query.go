@@ -27,11 +27,12 @@ func (q Query) HasArgs() bool {
 // QueryValue is the holder for our IO part of the query
 // It exists to hold a new class, or an existing one.
 type QueryValue struct {
-	Emit   bool
-	Name   string
-	DBName string
-	Class  *Class
-	Typ    string
+	Emit    bool
+	Name    string
+	DBName  string
+	Class   *Class
+	Typ     string
+	NotNull bool
 
 	Column *plugin.Column
 }
@@ -58,6 +59,19 @@ func (v QueryValue) Type() string {
 	panic("no type for QueryValue: " + v.Name)
 }
 
+func (v QueryValue) EmitReturnType(emitNull bool) string {
+	if !emitNull {
+		return v.Type()
+	}
+
+	// Return types may always be null
+	if strings.HasSuffix(v.Type(), "?") {
+		return v.Type()
+	} else {
+		return v.Type() + "?"
+	}
+}
+
 func (v QueryValue) Pair() string {
 	log.Println("Arg value pair: ", v)
 	if v.isEmpty() {
@@ -70,10 +84,10 @@ func (v QueryValue) Pair() string {
 			out = append(out, f.Type+" "+strings.ToLower(f.Name))
 		}
 
-		return ", " + strings.Join(out, ",")
+		return strings.Join(out, ", ")
 	}
 
-	return ", " + v.Type() + " " + v.Name
+	return v.Type() + " " + v.Name
 }
 
 func (v QueryValue) UniqueMembers() []ClassMember {

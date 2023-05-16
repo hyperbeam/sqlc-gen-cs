@@ -9,6 +9,8 @@ import (
 	plugin "github.com/tabbed/sqlc-go/codegen"
 	"github.com/tabbed/sqlc-go/metadata"
 	"github.com/tabbed/sqlc-go/sdk"
+
+	"github.com/hyperbeam/sqlc-gen-cs/internal/inflection"
 )
 
 // Column tagged with an ID for matching parameters used multiple times in queries
@@ -64,7 +66,7 @@ func BuildEnums(req *plugin.CodeGenRequest) []Enum {
 	return enums
 }
 
-func BuildClasses(req *plugin.CodeGenRequest) []Class {
+func BuildClasses(req *plugin.CodeGenRequest, conf Config) []Class {
 	log.Println("Building classes...")
 	var classes []Class
 	for _, schema := range req.Catalog.Schemas {
@@ -80,6 +82,13 @@ func BuildClasses(req *plugin.CodeGenRequest) []Class {
 			}
 			className := tableName
 
+			if !conf.EmitExactTableNames {
+				className = inflection.Singular(inflection.SingularParams{
+					Name:       tableName,
+					Exclusions: conf.InflectionExcludeTableNames,
+				})
+			}
+
 			c := Class{
 				Table:   &plugin.Identifier{Schema: schema.Name, Name: table.Rel.Name},
 				Name:    ClassName(className, req.Settings),
@@ -87,11 +96,19 @@ func BuildClasses(req *plugin.CodeGenRequest) []Class {
 			}
 
 			for _, column := range table.Columns {
-				c.Members = append(c.Members, ClassMember{
+				member := ClassMember{
 					Name:    ClassName(column.Name, req.Settings),
-					Type:    CsType(req, column),
+					Type:    CsType(req, column, &conf),
 					Comment: column.Comment,
-				})
+				}
+
+				if conf.EmitNullOperators {
+					member.NotNull = column.NotNull
+				} else {
+					member.NotNull = false
+				}
+
+				c.Members = append(c.Members, member)
 			}
 
 			classes = append(classes, c)
@@ -133,8 +150,13 @@ func BuildQueries(req *plugin.CodeGenRequest, conf Config, classes []Class) ([]Q
 			gq.Arg = QueryValue{
 				Name:   paramName(p),
 				DBName: p.Column.Name,
-				Typ:    CsType(req, p.Column),
+				Typ:    CsType(req, p.Column, &conf),
 				Column: p.Column,
+			}
+			if conf.EmitNullOperators {
+				gq.Arg.NotNull = p.Column.NotNull
+			} else {
+				gq.Arg.NotNull = false
 			}
 		} else if len(query.Params) >= 1 {
 			var cols []codeColumn
@@ -144,7 +166,7 @@ func BuildQueries(req *plugin.CodeGenRequest, conf Config, classes []Class) ([]Q
 					Column: p.Column,
 				})
 			}
-			c, err := columnsToClass(req, gq.MethodName+"Params", cols, false)
+			c, err := columnsToClass(&conf, req, gq.MethodName+"Params", cols, false)
 			if err != nil {
 				log.Println("Error in arguments: ", err)
 				return nil, err
@@ -169,7 +191,13 @@ func BuildQueries(req *plugin.CodeGenRequest, conf Config, classes []Class) ([]Q
 			gq.Ret = QueryValue{
 				Name:   name,
 				DBName: name,
-				Typ:    CsType(req, c),
+				Typ:    CsType(req, c, &conf),
+			}
+
+			if conf.EmitNullOperators && !strings.HasSuffix(gq.Ret.Typ, "?") {
+				gq.Ret.NotNull = true
+			} else {
+				gq.Ret.NotNull = false
 			}
 		} else if putOutColumns(query) {
 			var gs *Class
@@ -183,7 +211,7 @@ func BuildQueries(req *plugin.CodeGenRequest, conf Config, classes []Class) ([]Q
 				for i, f := range class.Members {
 					c := query.Columns[i]
 					sameName := f.Name == ClassName(columnName(c, i), req.Settings)
-					sameType := f.Type == CsType(req, c)
+					sameType := f.Type == CsType(req, c, &conf)
 					sameTable := sdk.SameTableName(c.Table, class.Table, req.Catalog.DefaultSchema)
 					if !sameName || !sameType || !sameTable {
 						same = false
@@ -204,7 +232,7 @@ func BuildQueries(req *plugin.CodeGenRequest, conf Config, classes []Class) ([]Q
 					})
 				}
 				var err error
-				gs, err = columnsToClass(req, gq.MethodName+"Row", columns, true)
+				gs, err = columnsToClass(&conf, req, gq.MethodName+"Row", columns, true)
 				if err != nil {
 					return nil, err
 				}
@@ -264,7 +292,7 @@ func putOutColumns(query *plugin.Query) bool {
 	return false
 }
 
-func columnsToClass(req *plugin.CodeGenRequest, name string, columns []codeColumn, useID bool) (*Class, error) {
+func columnsToClass(conf *Config, req *plugin.CodeGenRequest, name string, columns []codeColumn, useID bool) (*Class, error) {
 	class := Class{
 		Name: name,
 	}
@@ -292,7 +320,13 @@ func columnsToClass(req *plugin.CodeGenRequest, name string, columns []codeColum
 			Name:   memberName,
 			DBName: colName,
 			Column: c.Column,
-			Type:   CsType(req, c.Column),
+			Type:   CsType(req, c.Column, conf),
+		}
+
+		if conf.EmitNullOperators {
+			member.NotNull = c.Column.NotNull
+		} else {
+			member.NotNull = false
 		}
 
 		class.Members = append(class.Members, member)

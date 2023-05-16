@@ -12,6 +12,7 @@
 // versions:
 //     sqlc {{ .SqlcVersion }}
 //     sqlc-gen-cs {{ .CsGenVersion }}
+using Npgsql;
 
 namespace {{ .Namespace }};
 
@@ -23,27 +24,30 @@ public static class {{classname .QueryFileName }} {
     {{.SQL}}
     ";
 
-    {{- if .Arg.EmitClass}}
+    {{ if .Arg.EmitClass -}}
     public class {{.Arg.Type}} { {{- range .Arg.UniqueMembers}}
-        public {{.Type}} {{.Name}};
+        public {{.Type}} {{.Name}} {{if .NotNull -}} = default! {{- end}};
         {{- end}}
     }
-    {{end}}
+
+    {{end -}}
 
     {{- if .Ret.EmitClass}}
+
     public class {{.Ret.Type}} { {{- range .Ret.Class.Members}}
-        public {{.Type}} {{.Name}}
+        public {{.Type}} {{.Name}} {{if .NotNull -}} = default! {{- end}};
         {{- end}}
     }
-    {{end}}
+
+    {{end -}}
 
     {{- if eq .Cmd ":one"}}
     {{- range .Comments}}// {{.}}
     {{- end}}
-    {{- if $.EmitAsync}}
-    public static async Task<{{.Ret.Type}}?> {{.MethodName}}(this NpgsqlDataSource dbSource, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null{{.Arg.Pair}}) {
+    {{- if $.EmitAsync -}}
+    public static async Task<{{.Ret.EmitReturnType $.EmitNulls}}> {{.MethodName}}(this NpgsqlDataSource dbSource, {{.Arg.Pair}}, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null) {
         await using var connection = conn ?? await dbSource.OpenConnectionAsync();
-        await using var command = new NpgsqlCommand({{.ConstantName}}, conn, tx) {{- if .HasArgs }} {
+        await using var command = new NpgsqlCommand({{.ConstantName}}, connection, tx) {{- if .HasArgs }} {
             Parameters = {
                 {{- if .Arg.IsClass }}
                 {{- range .Arg.UniqueMembers }}
@@ -58,7 +62,7 @@ public static class {{classname .QueryFileName }} {
                 {{- end}}
             }
         }{{- end}};
-        await using var reader = command.ExecuteReaderAsync(); 
+        await using var reader = await command.ExecuteReaderAsync(); 
         if(await reader.ReadAsync()) {
             {{- if .Ret.IsClass}}
             return new {{.Ret.Type}} {
@@ -74,9 +78,9 @@ public static class {{classname .QueryFileName }} {
         } 
     }
     {{- else}}
-    public static {{.Ret.Type}}? {{.MethodName}} (this NpgsqlDataSource dbSource, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null{{.Arg.Pair}}) {
+    public static {{.Ret.EmitReturnType $.EmitNulls}} {{.MethodName}} (this NpgsqlDataSource dbSource, {{.Arg.Pair}}, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null) {
         using var connection = conn ?? dbSource.OpenConnection();
-        using var command = new NpgsqlCommand({{.ConstantName}}, conn, tx) {{- if .HasArgs }} {
+        using var command = new NpgsqlCommand({{.ConstantName}}, connection, tx) {{- if .HasArgs }} {
             Parameters = {
                 {{- if .Arg.IsClass }}
                 {{- range .Arg.UniqueMembers }}
@@ -106,15 +110,16 @@ public static class {{classname .QueryFileName }} {
             return null;
         } 
     }
-    {{- end}}
-    {{- end}}
+    {{end -}}
+    {{end -}}
 
-    {{if eq .Cmd ":many"}}
-    {{range .Comments}}//{{.}}
-    {{end}}
+    {{- if eq .Cmd ":many"}}
+    {{- range .Comments}}// {{.}}
+    {{- end}}
     {{- if $.EmitAsync}}
-    public static async Task<List<{{.Ret.Type}}>?> {{.MethodName}}(this NpgsqlDataSource dbSource, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null{{.Arg.Pair}}) {
-        await using var command = new NpgsqlCommand({{.ConstantName}}, conn, tx) {{- if .HasArgs }} {
+    public static async Task<List<{{.Ret.EmitReturnType $.EmitNulls}}>> {{.MethodName}}(this NpgsqlDataSource dbSource, {{.Arg.Pair}}, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null) {
+        await using var connection = conn ?? await dbSource.OpenConnectionAsync();
+        await using var command = new NpgsqlCommand({{.ConstantName}}, connection, tx) {{- if .HasArgs }} {
             Parameters = {
                 {{- if .Arg.IsClass }}
                 {{- range .Arg.UniqueMembers }}
@@ -129,11 +134,11 @@ public static class {{classname .QueryFileName }} {
                 {{- end}}
             }
         }{{- end}};
-        await using var reader = command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync();
         if(!reader.HasRows()) {
             return null;
         }
-        var results = new List<{{.Ret.Type}}>();
+        var results = new List<{{.Ret.EmitReturnType $.EmitNulls}}>();
         while(await reader.ReadAsync()) {
             {{- if .Ret.IsClass}}
             results.Add(new {{.Ret.Type}} {
@@ -149,9 +154,9 @@ public static class {{classname .QueryFileName }} {
         return results;
     }
     {{else}}
-    public static List<{{.Ret.Type}}>? {{.MethodName}} (this NpgsqlDataSource dbSource, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null{{.Arg.Pair}}) {
+    public static List<{{.Ret.EmitReturnType $.EmitNulls}}> {{.MethodName}} (this NpgsqlDataSource dbSource, {{.Arg.Pair}}, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null) {
         using var connection = conn ?? dbSource.OpenConnection();
-        using var command = new NpgsqlCommand({{.ConstantName}}, conn, tx) {{- if .HasArgs }} {
+        using var command = new NpgsqlCommand({{.ConstantName}}, connection, tx) {{- if .HasArgs }} {
             Parameters = {
                 {{- if .Arg.IsClass }}
                 {{- range .Arg.UniqueMembers }}
@@ -170,7 +175,7 @@ public static class {{classname .QueryFileName }} {
         if(!reader.HasRows()) {
             return null;
         }
-        var results = new List<{{.Ret.Type}}>();
+        var results = new List<{{.Ret.EmitReturnType $.EmitNulls}}>();
         while(reader.ReadAsync()) {
             {{- if .Ret.IsClass}}
             results.Add(new {{.Ret.Type}} {
@@ -185,15 +190,16 @@ public static class {{classname .QueryFileName }} {
 
         return results;
     }
-    {{- end}}
-    {{- end}}
+    {{ end -}}
+    {{ end -}}
 
     {{- if eq .Cmd ":exec" ":execresult" ":execrows" }}
-    {{range .Comments}}//{{.}}
-    {{end}}
+    {{- range .Comments}}//{{.}}
+    {{- end}}
     {{- if $.EmitAsync}}
-    public static async Task<int> {{.MethodName}}(this NpgsqlDataSource dbSource, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null{{.Arg.Pair}}) {
-        await using var command = new NpgsqlCommand({{.ConstantName}}, conn, tx) {{- if .HasArgs }} {
+    public static async Task<int> {{.MethodName}}(this NpgsqlDataSource dbSource, {{.Arg.Pair}}, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null) {
+        await using var connection = conn ?? await dbSource.OpenConnectionAsync();
+        await using var command = new NpgsqlCommand({{.ConstantName}}, connection, tx) {{- if .HasArgs }} {
             Parameters = {
                 {{- if .Arg.IsClass }}
                 {{- range .Arg.UniqueMembers }}
@@ -208,12 +214,12 @@ public static class {{classname .QueryFileName }} {
                 {{- end}}
             }
         }{{- end}};
-        return command.ExecuteNonQueryAsync();
+        return await command.ExecuteNonQueryAsync();
     }
     {{- else}}
-    public static int {{.MethodName}} (this NpgsqlDataSource dbSource, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null{{.Arg.Pair}}) {
+    public static int {{.MethodName}} (this NpgsqlDataSource dbSource, {{.Arg.Pair}}, NpgsqlConnection? conn = null, NpgsqlTransaction? tx = null) {
         using var connection = conn ?? dbSource.OpenConnection();
-        using var command = new NpgsqlCommand({{.ConstantName}}, conn, tx) {{- if .HasArgs }} {
+        using var command = new NpgsqlCommand({{.ConstantName}}, connection, tx) {{- if .HasArgs }} {
             Parameters = {
                 {{- if .Arg.IsClass }}
                 {{- range .Arg.UniqueMembers }}
@@ -230,9 +236,9 @@ public static class {{classname .QueryFileName }} {
         } {{- end}};
         return command.ExecuteNonQuery();
     }
-    {{- end}}
-    {{- end}}
-    {{- end}}
-    {{end}}
+    {{ end -}}
+    {{ end -}}
+    {{ end -}}
+    {{ end }}
 }
-{{end}}
+{{- end}}

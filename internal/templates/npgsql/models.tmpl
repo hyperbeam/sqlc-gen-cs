@@ -3,24 +3,23 @@
 //     sqlc {{ .SqlcVersion }}
 //     sqlc-gen-cs {{ .CsGenVersion }}
 
-namespace {{ .Namespace }};
-{{ range .Enums }}
-{{ if .Comment }}{{ comment .Comment }}{{ end }}
+namespace {{ .Namespace -}};
+{{ range .Enums -}}
+{{ if .Comment }}{{ comment .Comment }}{{ end}}
 public enum {{.Name}} { {{- range .Members }}
     {{ .Name }},
     {{ end }}
 }
-{{ end }}
+{{ end -}}
 
-
-{{range .Classes}}
+{{range .Classes -}}
 {{if .Comment}}{{comment.Comment}}{{end}}
 public class {{.Name}} { {{- range .Members}}
     {{- if .Comment}}
     {{comment .Comment}}{{else}}
     {{- end}}
-    public {{.Type}} {{.Name}} { get; set; }
+    public {{.Type}} {{.Name}} { get; set; } {{ if .NotNull -}} = default!; {{- end }}
     {{- end}}
 }
-{{end}}
+{{end -}}
 {{end}}

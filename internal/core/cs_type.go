@@ -5,7 +5,7 @@ import (
 	sdk "github.com/tabbed/sqlc-go/sdk"
 )
 
-func CsType(req *plugin.CodeGenRequest, col *plugin.Column) string {
+func CsType(req *plugin.CodeGenRequest, col *plugin.Column, conf *Config) string {
 	for _, oride := range req.Settings.Overrides {
 		if oride.CodeType == "" {
 			continue
@@ -17,7 +17,7 @@ func CsType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		}
 	}
 
-	typ := csInnerType(req, col)
+	typ := csInnerType(req, col, conf)
 	if col.IsArray {
 		return typ + "[]"
 	}
@@ -25,7 +25,7 @@ func CsType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 	return typ
 }
 
-func csInnerType(req *plugin.CodeGenRequest, col *plugin.Column) string {
+func csInnerType(req *plugin.CodeGenRequest, col *plugin.Column, conf *Config) string {
 	columnType := sdk.DataType(col.Type)
 	notNull := col.NotNull || col.IsArray
 
@@ -41,7 +41,7 @@ func csInnerType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 
 	switch req.Settings.Engine {
 	case "postgresql":
-		return PostgresType(req, col)
+		return PostgresType(req, col, conf)
 	default:
 		return "object"
 	}

@@ -5,7 +5,7 @@ import (
 	sdk "github.com/tabbed/sqlc-go/sdk"
 )
 
-func PostgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
+func PostgresType(req *plugin.CodeGenRequest, col *plugin.Column, conf *Config) string {
 	var csType string
 	columnType := sdk.DataType(col.Type)
 
@@ -137,7 +137,7 @@ func PostgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 
 	if col.IsArray {
 		return csType + "[]"
-	} else if !col.NotNull {
+	} else if !col.NotNull && conf.EmitNullOperators {
 		return csType + "?"
 	} else {
 		return csType

@@ -13,6 +13,7 @@ type ClassMember struct {
 	DBName  string
 	Type    string
 	Comment string
+	NotNull bool
 	Column  *plugin.Column
 }
 
